@@ -299,6 +299,37 @@ if (typeof RAW_LISTING !== 'undefined') {
     }
   });
 
+  // ── Download zip ──
+  document.getElementById('downloadZipBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('downloadZipBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Preparing…';
+
+    try {
+      const res = await fetch(`/download-zip/${RESULT_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listing_text: editor?.innerText || '' }),
+      });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'listing.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Download failed: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-file-zip"></i> Download';
+    }
+  });
+
   // ── Publish ──
   document.getElementById('publishBtn')?.addEventListener('click', async () => {
     const btn    = document.getElementById('publishBtn');

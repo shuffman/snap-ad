@@ -4,6 +4,7 @@ import io
 import json
 import os
 import uuid
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -305,6 +306,40 @@ async def download_image(result_id: str, index: int):
         io.BytesIO(data["images"][index]),
         media_type="image/jpeg",
         headers={"Content-Disposition": f'attachment; filename="photo-{index + 1}.jpg"'},
+    )
+
+
+# ── Download zip ──────────────────────────────────────────────────────────────
+
+@app.post("/download-zip/{result_id}")
+async def download_zip(result_id: str, request: Request):
+    data = _results.get(result_id)
+    if not data:
+        raise HTTPException(status_code=404)
+
+    body: dict = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    listing_text = body.get("listing_text") or data["listing_text"]
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for i, img_bytes in enumerate(data["images"]):
+            zf.writestr(f"photos/photo-{i + 1}.jpg", img_bytes)
+        zf.writestr("listing.txt", listing_text)
+    buf.seek(0)
+
+    car = data.get("car_info", {})
+    name = " ".join(p for p in [car.get("year"), car.get("make"), car.get("model")] if p)
+    filename = (name.lower().replace(" ", "-") or "listing") + ".zip"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
