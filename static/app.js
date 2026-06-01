@@ -216,9 +216,16 @@ if (typeof RAW_LISTING !== 'undefined') {
   const hero   = document.getElementById('galleryHero');
 
   // ── Render listing into contenteditable ──
-  if (editor && typeof marked !== 'undefined') {
-    editor.innerHTML = marked.parse(RAW_LISTING);
+  let currentMarkdown = RAW_LISTING;
+
+  function setListing(markdown) {
+    currentMarkdown = markdown;
+    if (editor && typeof marked !== 'undefined') {
+      editor.innerHTML = marked.parse(markdown);
+    }
   }
+
+  setListing(RAW_LISTING);
 
   // ── Gallery navigation ──
   let currentIdx = 0;
@@ -279,7 +286,7 @@ if (typeof RAW_LISTING !== 'undefined') {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      if (editor) editor.innerHTML = marked.parse(data.listing_text);
+      setListing(data.listing_text);
     } catch (e) {
       alert('Regeneration failed: ' + e.message);
     } finally {
@@ -328,12 +335,12 @@ if (typeof RAW_LISTING !== 'undefined') {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           correction,
-          current_text: editor?.innerText || '',
+          current_text: currentMarkdown,
         }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      if (editor) editor.innerHTML = marked.parse(data.listing_text);
+      setListing(data.listing_text);
     } catch (e) {
       alert('Could not apply correction: ' + e.message);
     } finally {
