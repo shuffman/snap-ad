@@ -67,6 +67,7 @@ async def result_page(request: Request, result_id: str):
 async def process(
     images: List[UploadFile] = File(default=[]),
     gdrive_url: str = Form(""),
+    extra_info: str = Form(""),
 ):
     loop = asyncio.get_event_loop()
     raw_images: list[bytes] = []
@@ -120,13 +121,16 @@ async def process(
 
     img_b64_full = [base64.b64encode(r).decode() for r in enhanced_images[:4]]
     try:
-        listing_text = await generate_listing(car_info, img_b64_full, pdf_b64 or None)
+        listing_text = await generate_listing(
+            car_info, img_b64_full, pdf_b64 or None, extra_info.strip() or None
+        )
     except Exception as e:
         listing_text = f"*(Could not generate listing: {e})*"
 
     result_id = str(uuid.uuid4())
     _results[result_id] = {
         "car_info": car_info,
+        "extra_info": extra_info.strip(),
         "raw_images": raw_images,
         "images": enhanced_images,
         "pdfs": raw_pdfs,
@@ -151,7 +155,8 @@ async def regenerate(result_id: str):
 
     try:
         listing_text = await generate_listing(
-            data["car_info"], img_b64, pdf_b64 or None
+            data["car_info"], img_b64, pdf_b64 or None,
+            data.get("extra_info") or None,
         )
         data["listing_text"] = listing_text
         return JSONResponse({"listing_text": listing_text})

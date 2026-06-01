@@ -9,6 +9,7 @@ async def generate_listing(
     car_info: dict,
     image_b64_list: list[str],
     pdf_b64_list: list[str] | None = None,
+    extra_info: str | None = None,
 ) -> str:
     async with anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"]) as client:
         content: list = []
@@ -37,6 +38,11 @@ async def generate_listing(
                 }
             )
 
+        extra_block = (
+            f"\nAdditional notes from the seller:\n{extra_info}\n"
+            if extra_info else ""
+        )
+
         content.append(
             {
                 "type": "text",
@@ -45,7 +51,7 @@ async def generate_listing(
 Based on the vehicle details and photos provided, write a compelling listing that stops a buyer mid-scroll and makes them pick up the phone.
 
 Car Details:
-{_format_details(car_info)}
+{_format_details(car_info)}{extra_block}
 
 Write the listing using this exact structure:
 
