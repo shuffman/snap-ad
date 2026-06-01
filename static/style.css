@@ -1,0 +1,194 @@
+/* ── Base ── */
+body {
+  background: #f4f6f9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1a1d23;
+}
+
+/* ── Header ── */
+.site-header {
+  background: linear-gradient(135deg, #1a2340 0%, #243060 100%);
+  color: #fff;
+}
+.site-header h1 { font-size: 1.75rem; letter-spacing: -0.5px; }
+.header-icon { color: #f5c842; }
+.header-sub { color: rgba(255,255,255,0.6); font-size: 0.9rem; }
+
+/* ── Success bar ── */
+.success-bar {
+  background: #d4edda;
+  color: #155724;
+  font-size: 0.95rem;
+  border-bottom: 1px solid #c3e6cb;
+}
+
+/* ── Cards ── */
+.card { border: 1px solid #e2e6ea; border-radius: 12px; }
+.card-header {
+  background: #fff;
+  border-bottom: 1px solid #e2e6ea;
+  border-radius: 12px 12px 0 0 !important;
+  padding: 1rem 1.25rem;
+}
+
+/* ── Drop zone ── */
+.drop-zone {
+  border: 2px dashed #c8cfd8;
+  border-radius: 10px;
+  min-height: 220px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: #0d6efd;
+  background: #f0f5ff;
+}
+.drop-prompt {
+  text-align: center;
+  padding: 2rem;
+  pointer-events: none;
+}
+.drop-prompt p { color: #6c757d; }
+
+/* ── Preview grid ── */
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px;
+  width: 100%;
+  align-self: flex-start;
+}
+.preview-item {
+  position: relative;
+  aspect-ratio: 4/3;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+.preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.remove-photo {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.remove-photo:hover { background: #dc3545; }
+
+/* ── AI badge ── */
+.ai-badge {
+  background: #fffbea;
+  border: 1px solid #ffe58f;
+  font-size: 0.875rem;
+  color: #6d5502;
+}
+
+/* ── Processing spinner ── */
+.processing-spinner {
+  width: 56px;
+  height: 56px;
+  border: 5px solid #e2e8f0;
+  border-top-color: #0d6efd;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Photo grid (result page) ── */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.photo-item {
+  position: relative;
+  aspect-ratio: 4/3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  cursor: pointer;
+}
+.photo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.25s;
+}
+.photo-item:hover img { transform: scale(1.03); }
+.photo-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.photo-item:hover .photo-overlay { opacity: 1; }
+
+/* ── Listing prose ── */
+.listing-prose {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: #2d3748;
+}
+.listing-prose h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #1a2340;
+  margin-bottom: 0.75rem;
+  line-height: 1.3;
+}
+.listing-prose h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1a2340;
+  margin-top: 1.4rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 2px solid #e8f0fe;
+  padding-bottom: 4px;
+}
+.listing-prose ul {
+  padding-left: 1.25rem;
+  margin-bottom: 1rem;
+}
+.listing-prose li { margin-bottom: 0.3rem; }
+.listing-prose p { margin-bottom: 0.9rem; }
+.listing-prose strong { color: #1a2340; }
+
+/* ── Print ── */
+@media print {
+  .site-header, .success-bar, footer,
+  .card-header .btn, #copyBtn { display: none !important; }
+  .col-lg-5 { display: none !important; }
+  .col-lg-7 { width: 100% !important; max-width: 100% !important; }
+  .card { border: none !important; box-shadow: none !important; }
+  body { background: #fff !important; }
+}
