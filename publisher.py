@@ -76,7 +76,7 @@ async def deploy_listing(
     Returns the public GitHub Pages URL for the new listing.
     """
     headers = _gh_headers()
-    slug = _make_slug(car_info)
+    slug = _make_slug(car_info, listing_text)
 
     async with httpx.AsyncClient(headers=headers, timeout=120) as client:
         # 1. Upload images
@@ -134,7 +134,7 @@ async def _update_root_index(
 
 
 def _render_index_card(slug: str, car_info: dict, listing_text: str) -> str:
-    title = _title(car_info)
+    title = _title(car_info, listing_text)
     price = f"${car_info['price']}" if car_info.get("price") else ""
     badge = f'<span class="card-badge">{price}</span>' if price else ""
 
@@ -170,7 +170,7 @@ def _render_listing_page(
     n_images: int,
     listing_html: str | None = None,
 ) -> str:
-    title = _title(car_info)
+    title = _title(car_info, listing_text)
     price_str = f"${car_info['price']}" if car_info.get("price") else "Contact for price"
     month_year = datetime.now().strftime("%B %Y")
 
@@ -345,7 +345,21 @@ def _render_listing_page(
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _title(car_info: dict) -> str:
+def _headline_from_listing(listing_text: str) -> str:
+    """Extract the # headline from a markdown listing, stripped of markup."""
+    for line in listing_text.split("\n"):
+        line = line.strip()
+        if line.startswith("# "):
+            return re.sub(r"[*_`]", "", line[2:]).strip()
+    return ""
+
+
+def _title(car_info: dict, listing_text: str = "") -> str:
+    # Prefer the listing headline — it reflects any corrections the user applied.
+    if listing_text:
+        headline = _headline_from_listing(listing_text)
+        if headline:
+            return headline
     parts = [
         car_info.get("year", ""),
         car_info.get("make", ""),
@@ -355,7 +369,16 @@ def _title(car_info: dict) -> str:
     return " ".join(p for p in parts if p).strip() or "Vehicle For Sale"
 
 
-def _make_slug(car_info: dict) -> str:
+def _make_slug(car_info: dict, listing_text: str = "") -> str:
+    # Derive from listing headline so corrections to year/make/model are reflected.
+    if listing_text:
+        headline = _headline_from_listing(listing_text)
+        if headline:
+            words = headline.split()[:5]
+            slug = "-".join(re.sub(r"[^a-z0-9]", "", w.lower()) for w in words)
+            slug = re.sub(r"-+", "-", slug).strip("-")
+            if len(slug) > 3:
+                return slug
     parts = [car_info.get("year", ""), car_info.get("make", ""), car_info.get("model", "")]
     raw = "-".join(p.lower() for p in parts if p)
     slug = re.sub(r"[^a-z0-9]+", "-", raw).strip("-")
