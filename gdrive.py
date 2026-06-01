@@ -59,9 +59,16 @@ def _api_key() -> str:
     return key
 
 
-async def fetch_files_from_drive(url: str) -> tuple[list[bytes], list[bytes], str]:
+from collections.abc import Callable
+
+
+async def fetch_files_from_drive(
+    url: str,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> tuple[list[bytes], list[bytes], str]:
     """
     Download images and PDF documents from a public Google Drive file or folder.
+    on_progress(current, total) is called after each file download.
     Returns (image_bytes_list, pdf_bytes_list, human_readable_status).
     Raises ValueError with a user-friendly message on failure.
     """
@@ -70,13 +77,16 @@ async def fetch_files_from_drive(url: str) -> tuple[list[bytes], list[bytes], st
 
     async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
         if drive_type == "folder":
-            return await _fetch_folder(client, drive_id, key)
+            return await _fetch_folder(client, drive_id, key, on_progress)
         else:
-            return await _fetch_single_file(client, drive_id, key)
+            return await _fetch_single_file(client, drive_id, key, on_progress)
 
 
 async def _fetch_folder(
-    client: httpx.AsyncClient, folder_id: str, key: str
+    client: httpx.AsyncClient,
+    folder_id: str,
+    key: str,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[list[bytes], list[bytes], str]:
     r = await client.get(
         f"{DRIVE_API}/files",
@@ -97,6 +107,7 @@ async def _fetch_folder(
             "Make sure the folder is shared as 'Anyone with the link can view'."
         )
 
+    # Separate into images and docs, respecting caps
     image_ids, pdf_ids = [], []
     for f in files:
         mime = f.get("mimeType", "")
@@ -110,13 +121,18 @@ async def _fetch_folder(
     image_ids = image_ids[:MAX_IMAGES]
     pdf_ids = pdf_ids[:MAX_DOCUMENTS]
 
-    img_results, pdf_results = await asyncio.gather(
-        asyncio.gather(*[_download(client, fid, key) for fid in image_ids], return_exceptions=True),
-        asyncio.gather(*[_download(client, fid, key) for fid in pdf_ids], return_exceptions=True),
-    )
+    # Download sequentially so we can report per-file progress
+    all_ids = [(fid, "image") for fid in image_ids] + [(fid, "pdf") for fid in pdf_ids]
+    total = len(all_ids)
+    images: list[bytes] = []
+    pdfs: list[bytes] = []
 
-    images = [r for r in img_results if isinstance(r, bytes) and r]
-    pdfs = [r for r in pdf_results if isinstance(r, bytes) and r]
+    for i, (fid, kind) in enumerate(all_ids):
+        data = await _download(client, fid, key)
+        if data:
+            (images if kind == "image" else pdfs).append(data)
+        if on_progress:
+            on_progress(i + 1, total)
 
     if not images and not pdfs:
         raise ValueError(
@@ -133,7 +149,10 @@ async def _fetch_folder(
 
 
 async def _fetch_single_file(
-    client: httpx.AsyncClient, file_id: str, key: str
+    client: httpx.AsyncClient,
+    file_id: str,
+    key: str,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[list[bytes], list[bytes], str]:
     r = await client.get(
         f"{DRIVE_API}/files/{file_id}",
@@ -143,6 +162,8 @@ async def _fetch_single_file(
     info = r.json()
 
     data = await _download(client, file_id, key)
+    if on_progress:
+        on_progress(1, 1)
     if not data:
         raise ValueError("Could not download the file from Google Drive.")
 

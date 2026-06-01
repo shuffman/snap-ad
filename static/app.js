@@ -138,27 +138,71 @@ if (document.getElementById('uploadForm')) {
     fileInput.files = dt.files;
   }
 
-  // ── Submit with loading overlay ──
+  // ── Submit → fetch + SSE progress ──
 
-  const stepEl = document.getElementById('processingLabel');
-  let stepIdx = 0;
+  const labelEl = document.getElementById('processingLabel');
+  const fillEl  = document.getElementById('processingFill');
 
-  function cycleSteps() {
-    if (!stepEl) return;
-    stepEl.style.opacity = '0';
-    setTimeout(() => {
-      stepIdx = (stepIdx + 1) % PROCESSING_STEPS.length;
-      stepEl.textContent = PROCESSING_STEPS[stepIdx];
-      stepEl.style.opacity = '1';
-    }, 300);
+  function setProgress(detail, progress) {
+    if (labelEl) labelEl.textContent = detail || 'Processing…';
+    if (fillEl)  fillEl.style.width = Math.max(2, progress) + '%';
   }
 
-  form.addEventListener('submit', () => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
     overlay.classList.remove('hidden');
     submitBtn.disabled = true;
-    if (stepEl) {
-      stepEl.textContent = PROCESSING_STEPS[0];
-      setInterval(cycleSteps, 4000);
+    setProgress('Starting…', 2);
+
+    try {
+      const fd = new FormData(form);
+      const res = await fetch('/process', { method: 'POST', body: fd });
+      const body = await res.json();
+
+      if (body.error === 'no_files') {
+        overlay.classList.add('hidden');
+        submitBtn.disabled = false;
+        window.location.href = '/?error=no_files';
+        return;
+      }
+      if (body.error) throw new Error(body.error);
+
+      const { job_id } = body;
+      const es = new EventSource(`/progress/${job_id}`);
+
+      es.onmessage = (evt) => {
+        const data = JSON.parse(evt.data);
+
+        if (data.step === 'error') {
+          es.close();
+          overlay.classList.add('hidden');
+          submitBtn.disabled = false;
+          alert('Error: ' + (data.error || 'Something went wrong.'));
+          return;
+        }
+
+        setProgress(data.detail, data.progress);
+
+        if (data.step === 'done') {
+          es.close();
+          setProgress('Done!', 100);
+          setTimeout(() => {
+            window.location.href = `/result/${data.result_id}`;
+          }, 300);
+        }
+      };
+
+      es.onerror = () => {
+        es.close();
+        overlay.classList.add('hidden');
+        submitBtn.disabled = false;
+        alert('Lost connection to server. Please try again.');
+      };
+
+    } catch (err) {
+      overlay.classList.add('hidden');
+      submitBtn.disabled = false;
+      alert('Error: ' + err.message);
     }
   });
 }

@@ -296,6 +296,22 @@ body.upload-page {
   font-weight: 300;
   color: rgba(255,255,255,0.7);
   letter-spacing: 0.02em;
+  min-height: 1.5em;
+}
+.processing-bar-track {
+  width: 260px;
+  height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  margin: 1.25rem auto 0;
+  overflow: hidden;
+}
+.processing-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s ease;
 }
 
 

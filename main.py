@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import io
+import json
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -22,6 +23,7 @@ from text_generator import analyze_car_photos, generate_listing
 
 _executor = ThreadPoolExecutor(max_workers=4)
 _results: dict = {}
+_jobs: dict = {}   # job_id → {step, detail, progress, result_id, error, drive_error}
 
 
 @asynccontextmanager
@@ -61,7 +63,7 @@ async def result_page(request: Request, result_id: str):
     )
 
 
-# ── Process ────────────────────────────────────────────────────────────────────
+# ── Process: read uploads, start background job, return job_id ─────────────────
 
 @app.post("/process")
 async def process(
@@ -69,10 +71,8 @@ async def process(
     gdrive_url: str = Form(""),
     extra_info: str = Form(""),
 ):
-    loop = asyncio.get_event_loop()
     raw_images: list[bytes] = []
     raw_pdfs: list[bytes] = []
-    drive_error: Optional[str] = None
 
     for upload in images:
         if not upload.filename:
@@ -85,61 +85,155 @@ async def process(
         else:
             raw_images.append(raw)
 
-    if gdrive_url.strip():
-        try:
-            drive_imgs, drive_docs, _ = await fetch_files_from_drive(gdrive_url.strip())
-            raw_images.extend(drive_imgs)
-            raw_pdfs.extend(drive_docs)
-        except ValueError as e:
-            drive_error = str(e)
+    # Need at least something to work with (uploaded files or a Drive URL)
+    if not raw_images and not raw_pdfs and not gdrive_url.strip():
+        return JSONResponse({"error": "no_files"}, status_code=400)
 
-    if not raw_images and not raw_pdfs:
-        return RedirectResponse(url="/?error=no_files", status_code=303)
-
-    # Concurrently enhance all images and resize a subset for analysis
-    enhanced_results, resized_results = await asyncio.gather(
-        asyncio.gather(
-            *[loop.run_in_executor(_executor, enhance_image, r) for r in raw_images],
-            return_exceptions=True,
-        ),
-        asyncio.gather(
-            *[loop.run_in_executor(_executor, resize_for_analysis, r) for r in raw_images[:6]],
-            return_exceptions=True,
-        ),
-    )
-
-    enhanced_images = [r for r in enhanced_results if isinstance(r, bytes)]
-    resized_images = [r for r in resized_results if isinstance(r, bytes)]
-
-    img_b64_small = [base64.b64encode(r).decode() for r in resized_images]
-    pdf_b64 = [base64.b64encode(r).decode() for r in raw_pdfs[:5]]
-
-    try:
-        car_info = await analyze_car_photos(img_b64_small, pdf_b64 or None)
-    except Exception:
-        car_info = {}
-
-    img_b64_full = [base64.b64encode(r).decode() for r in enhanced_images[:4]]
-    try:
-        listing_text = await generate_listing(
-            car_info, img_b64_full, pdf_b64 or None, extra_info.strip() or None
-        )
-    except Exception as e:
-        listing_text = f"*(Could not generate listing: {e})*"
-
-    result_id = str(uuid.uuid4())
-    _results[result_id] = {
-        "car_info": car_info,
-        "extra_info": extra_info.strip(),
-        "raw_images": raw_images,
-        "images": enhanced_images,
-        "pdfs": raw_pdfs,
-        "listing_text": listing_text,
-        "enhance_preset": "standard",
-        "drive_error": drive_error,
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {
+        "step": "queued",
+        "detail": "Starting…",
+        "progress": 0,
+        "result_id": None,
+        "error": None,
+        "drive_error": None,
     }
 
-    return RedirectResponse(url=f"/result/{result_id}", status_code=303)
+    asyncio.create_task(
+        _run_job(job_id, raw_images, raw_pdfs, gdrive_url.strip(), extra_info.strip())
+    )
+
+    return JSONResponse({"job_id": job_id})
+
+
+# ── Background job ─────────────────────────────────────────────────────────────
+
+async def _run_job(
+    job_id: str,
+    raw_images: list[bytes],
+    raw_pdfs: list[bytes],
+    gdrive_url: str,
+    extra_info: str,
+) -> None:
+    job = _jobs[job_id]
+    loop = asyncio.get_event_loop()
+
+    def status(step: str, detail: str, progress: int) -> None:
+        job.update({"step": step, "detail": detail, "progress": progress})
+
+    try:
+        # ── 1. Download from Drive ──────────────────────────────────────────
+        if gdrive_url:
+            status("downloading", "Connecting to Google Drive…", 2)
+
+            def on_progress(current: int, total: int) -> None:
+                pct = int(current / total * 38)
+                status(
+                    "downloading",
+                    f"Downloading {current} of {total} from Google Drive…",
+                    2 + pct,
+                )
+
+            try:
+                drive_imgs, drive_docs, _ = await fetch_files_from_drive(
+                    gdrive_url, on_progress=on_progress
+                )
+                raw_images.extend(drive_imgs)
+                raw_pdfs.extend(drive_docs)
+            except ValueError as e:
+                job["drive_error"] = str(e)
+
+        if not raw_images and not raw_pdfs:
+            job.update({
+                "step": "error",
+                "error": "No images or documents found. Check your Drive link or upload files directly.",
+                "progress": 0,
+            })
+            return
+
+        # ── 2. Enhance images ───────────────────────────────────────────────
+        n = len(raw_images)
+        status("enhancing", f"Enhancing {n} photo{'s' if n != 1 else ''}…", 42)
+
+        enhanced_results, resized_results = await asyncio.gather(
+            asyncio.gather(
+                *[loop.run_in_executor(_executor, enhance_image, r) for r in raw_images],
+                return_exceptions=True,
+            ),
+            asyncio.gather(
+                *[loop.run_in_executor(_executor, resize_for_analysis, r) for r in raw_images[:6]],
+                return_exceptions=True,
+            ),
+        )
+
+        enhanced_images = [r for r in enhanced_results if isinstance(r, bytes)]
+        resized_images = [r for r in resized_results if isinstance(r, bytes)]
+
+        # ── 3. Analyze ──────────────────────────────────────────────────────
+        status("analyzing", "Analyzing vehicle…", 62)
+
+        img_b64_small = [base64.b64encode(r).decode() for r in resized_images]
+        pdf_b64 = [base64.b64encode(r).decode() for r in raw_pdfs[:5]]
+
+        try:
+            car_info = await analyze_car_photos(img_b64_small, pdf_b64 or None)
+        except Exception:
+            car_info = {}
+
+        # ── 4. Generate listing ─────────────────────────────────────────────
+        status("generating", "Writing your listing…", 78)
+
+        img_b64_full = [base64.b64encode(r).decode() for r in enhanced_images[:4]]
+        try:
+            listing_text = await generate_listing(
+                car_info, img_b64_full, pdf_b64 or None, extra_info or None
+            )
+        except Exception as e:
+            listing_text = f"*(Could not generate listing: {e})*"
+
+        # ── 5. Store & finish ───────────────────────────────────────────────
+        result_id = str(uuid.uuid4())
+        _results[result_id] = {
+            "car_info": car_info,
+            "extra_info": extra_info,
+            "raw_images": raw_images,
+            "images": enhanced_images,
+            "pdfs": raw_pdfs,
+            "listing_text": listing_text,
+            "enhance_preset": "standard",
+            "drive_error": job.get("drive_error"),
+        }
+
+        job.update({"step": "done", "detail": "Done!", "progress": 100, "result_id": result_id})
+
+    except Exception as e:
+        job.update({"step": "error", "error": str(e), "progress": 0})
+
+
+# ── SSE progress stream ────────────────────────────────────────────────────────
+
+@app.get("/progress/{job_id}")
+async def progress_stream(job_id: str):
+    async def generate():
+        while True:
+            job = _jobs.get(job_id)
+            if not job:
+                yield f"data: {json.dumps({'step': 'error', 'error': 'Job not found'})}\n\n"
+                return
+            yield f"data: {json.dumps(job)}\n\n"
+            if job["step"] in ("done", "error"):
+                return
+            await asyncio.sleep(0.35)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 # ── Regenerate listing text ────────────────────────────────────────────────────
