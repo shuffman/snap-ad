@@ -592,6 +592,47 @@ body.workspace-page {
 .listing-editor li { margin-bottom: 0.3rem; }
 .listing-editor strong { color: #111; }
 
+/* Refine bar */
+.refine-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border-l);
+  background: #fafafa;
+}
+.refine-bar input {
+  flex: 1;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border-l);
+  border-radius: 5px;
+  font-size: 0.82rem;
+  outline: none;
+  color: var(--text);
+  background: #fff;
+  transition: border-color 0.15s;
+}
+.refine-bar input:focus { border-color: #aaa; }
+.refine-bar input::placeholder { color: #aaa; }
+.refine-bar button {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.9rem;
+  background: var(--dark);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.refine-bar button:hover { background: #2a2a2a; }
+.refine-bar button:disabled { opacity: 0.5; cursor: default; }
+
 /* Publish status */
 .publish-status {
   flex-shrink: 0;

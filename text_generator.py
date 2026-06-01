@@ -189,6 +189,35 @@ Rules:
         return {k: str(v).strip() for k, v in data.items() if v not in (None, "", "null")}
 
 
+async def refine_listing(current_text: str, correction: str) -> str:
+    """Revise an existing listing based on seller corrections or additions."""
+    async with anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"]) as client:
+        message = await client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1400,
+            messages=[{
+                "role": "user",
+                "content": f"""You are revising a car listing based on feedback from the seller.
+
+Current listing:
+---
+{current_text}
+---
+
+Seller's correction or addition:
+{correction}
+
+Instructions:
+- Keep the same markdown structure and overall format
+- Correct any facts mentioned (mileage, price, color, features, etc.) throughout the listing
+- Naturally incorporate any new information provided
+- Keep the same persuasive tone — don't water it down
+- Return only the revised listing, no preamble or explanation""",
+            }],
+        )
+        return message.content[0].text
+
+
 def _format_details(car_info: dict) -> str:
     label_map = {
         "year": "Year",

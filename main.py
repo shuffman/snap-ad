@@ -20,7 +20,7 @@ load_dotenv()
 from gdrive import fetch_files_from_drive
 from image_processor import PRESETS, enhance_image, resize_for_analysis
 from publisher import deploy_listing
-from text_generator import analyze_car_photos, generate_listing
+from text_generator import analyze_car_photos, generate_listing, refine_listing
 
 _executor = ThreadPoolExecutor(max_workers=4)
 _results: dict = {}
@@ -255,6 +255,34 @@ async def regenerate(result_id: str):
         )
         data["listing_text"] = listing_text
         return JSONResponse({"listing_text": listing_text})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Refine listing with corrections ───────────────────────────────────────────
+
+@app.post("/refine/{result_id}")
+async def refine(result_id: str, request: Request):
+    data = _results.get(result_id)
+    if not data:
+        return JSONResponse({"error": "Result not found."}, status_code=404)
+
+    body: dict = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    correction = body.get("correction", "").strip()
+    current_text = body.get("current_text", "").strip() or data["listing_text"]
+
+    if not correction:
+        return JSONResponse({"error": "No correction provided."}, status_code=400)
+
+    try:
+        refined = await refine_listing(current_text, correction)
+        data["listing_text"] = refined
+        return JSONResponse({"listing_text": refined})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

@@ -299,6 +299,45 @@ if (typeof RAW_LISTING !== 'undefined') {
     }
   });
 
+  // ── Refine with corrections ──
+  const refineInput = document.getElementById('refineInput');
+  const refineBtn   = document.getElementById('refineBtn');
+
+  async function applyRefinement() {
+    const correction = refineInput?.value.trim();
+    if (!correction) return;
+
+    refineBtn.disabled = true;
+    refineBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Applying…';
+    if (editor) editor.style.opacity = '0.35';
+
+    try {
+      const res = await fetch(`/refine/${RESULT_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          correction,
+          current_text: editor?.innerText || '',
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (editor) editor.innerHTML = marked.parse(data.listing_text);
+      if (refineInput) refineInput.value = '';
+    } catch (e) {
+      alert('Could not apply correction: ' + e.message);
+    } finally {
+      refineBtn.disabled = false;
+      refineBtn.innerHTML = '<i class="bi bi-pencil-square"></i> Apply';
+      if (editor) editor.style.opacity = '1';
+    }
+  }
+
+  refineBtn?.addEventListener('click', applyRefinement);
+  refineInput?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); applyRefinement(); }
+  });
+
   // ── Download zip ──
   document.getElementById('downloadZipBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('downloadZipBtn');
