@@ -9,15 +9,15 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 load_dotenv()
 
 from gdrive import fetch_images_from_drive
-from image_processor import enhance_image
-from text_generator import generate_listing
+from image_processor import enhance_image, resize_for_analysis
+from text_generator import analyze_car_photos, generate_listing
 
 _executor = ThreadPoolExecutor(max_workers=4)
 _results: dict = {}  # {uuid: {car_info, images: [bytes], listing_text}}
@@ -130,6 +130,52 @@ async def process(
     }
 
     return RedirectResponse(url=f"/result/{result_id}", status_code=303)
+
+
+@app.post("/analyze")
+async def analyze(
+    images: List[UploadFile] = File(default=[]),
+    gdrive_url: str = Form(""),
+):
+    loop = asyncio.get_event_loop()
+    raw_images: list[bytes] = []
+
+    for upload in images:
+        if upload.filename:
+            raw = await upload.read()
+            if raw:
+                raw_images.append(raw)
+
+    # If no direct uploads, try Drive URL
+    if not raw_images and gdrive_url.strip():
+        try:
+            drive_imgs, _ = await loop.run_in_executor(
+                _executor, fetch_images_from_drive, gdrive_url.strip()
+            )
+            raw_images.extend(drive_imgs)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    if not raw_images:
+        return JSONResponse({"error": "No images provided."}, status_code=400)
+
+    # Resize (don't enhance) for fast analysis
+    resize_tasks = [
+        loop.run_in_executor(_executor, resize_for_analysis, raw)
+        for raw in raw_images[:6]
+    ]
+    resized = await asyncio.gather(*resize_tasks, return_exceptions=True)
+    b64_list = [
+        base64.b64encode(r).decode()
+        for r in resized
+        if isinstance(r, bytes)
+    ]
+
+    try:
+        detected = await analyze_car_photos(b64_list)
+        return JSONResponse(detected)
+    except Exception as e:
+        return JSONResponse({"error": f"Analysis failed: {e}"}, status_code=500)
 
 
 @app.get("/result/{result_id}", response_class=HTMLResponse)

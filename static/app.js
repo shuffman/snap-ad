@@ -53,6 +53,8 @@ if (document.getElementById('carForm')) {
   }
 
   function renderPreviews() {
+    updateAnalyzeVisibility();
+
     if (selectedFiles.length === 0) {
       previewGrid.classList.add('d-none');
       dropPrompt.style.display = '';
@@ -98,15 +100,99 @@ if (document.getElementById('carForm')) {
     imageInput.files = dt.files;
   }
 
+  // Show/hide the analyze button whenever photos or Drive URL change
+  const analyzeSection = document.getElementById('analyzeSection');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const analyzeStatus = document.getElementById('analyzeStatus');
+  const gdriveInput = document.getElementById('gdriveUrl');
+
+  function updateAnalyzeVisibility() {
+    const hasPhotos = selectedFiles.length > 0;
+    const hasDrive = gdriveInput && gdriveInput.value.trim().length > 0;
+    analyzeSection.classList.toggle('d-none', !hasPhotos && !hasDrive);
+  }
+
+  if (gdriveInput) {
+    gdriveInput.addEventListener('input', updateAnalyzeVisibility);
+  }
+
+  // ── Analyze handler ──
+  analyzeBtn.addEventListener('click', async () => {
+    analyzeBtn.disabled = true;
+    analyzeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Analyzing photos…';
+    analyzeStatus.textContent = '';
+    analyzeStatus.className = 'form-text text-center mt-1';
+
+    const fd = new FormData();
+    selectedFiles.forEach(f => fd.append('images', f));
+    if (gdriveInput && gdriveInput.value.trim()) {
+      fd.append('gdrive_url', gdriveInput.value.trim());
+    }
+
+    try {
+      const res = await fetch('/analyze', { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error);
+
+      const filled = populateForm(data);
+      analyzeStatus.textContent = filled > 0
+        ? `✓ Detected ${filled} field${filled !== 1 ? 's' : ''} — review and adjust below`
+        : 'No additional details detected from photos';
+      analyzeStatus.className = 'form-text text-center mt-1 text-success';
+    } catch (err) {
+      analyzeStatus.textContent = `Could not analyze: ${err.message}`;
+      analyzeStatus.className = 'form-text text-center mt-1 text-danger';
+    } finally {
+      analyzeBtn.disabled = false;
+      analyzeBtn.innerHTML = '<i class="bi bi-robot me-2"></i>Re-analyze photos';
+    }
+  });
+
+  // Map of detected JSON keys → form field IDs
+  const FIELD_MAP = {
+    year: 'f_year', make: 'f_make', model: 'f_model', trim: 'f_trim',
+    exterior_color: 'f_exterior_color', interior_color: 'f_interior_color',
+    condition: 'f_condition', transmission: 'f_transmission',
+    drivetrain: 'f_drivetrain', engine: 'f_engine',
+    features: 'f_features', notes: 'f_notes',
+  };
+
+  function populateForm(data) {
+    let filled = 0;
+    for (const [key, elId] of Object.entries(FIELD_MAP)) {
+      const val = data[key];
+      if (!val) continue;
+      const el = document.getElementById(elId);
+      if (!el) continue;
+
+      if (el.tagName === 'SELECT') {
+        const lower = val.toLowerCase();
+        let matched = false;
+        for (const opt of el.options) {
+          if (opt.value && opt.text.toLowerCase().startsWith(lower.slice(0, 4))) {
+            el.value = opt.value;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) continue;
+      } else {
+        if (el.value) continue; // don't overwrite existing input
+        el.value = val;
+      }
+
+      // Flash blue highlight to show it was AI-detected
+      el.classList.add('ai-detected');
+      setTimeout(() => el.classList.remove('ai-detected'), 3000);
+      filled++;
+    }
+    return filled;
+  }
+
   const processingModal = new bootstrap.Modal(document.getElementById('processingModal'));
 
   form.addEventListener('submit', (e) => {
-    if (!form.checkValidity()) {
-      e.preventDefault();
-      e.stopPropagation();
-      form.classList.add('was-validated');
-      return;
-    }
     processingModal.show();
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating…';

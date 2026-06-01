@@ -98,6 +98,13 @@ body {
 }
 .remove-photo:hover { background: #dc3545; }
 
+/* ── AI-detected field flash ── */
+.ai-detected {
+  border-color: #7c9ef7 !important;
+  background-color: #f0f4ff !important;
+  transition: border-color 0.3s, background-color 0.3s;
+}
+
 /* ── OR divider ── */
 .or-divider {
   display: flex;

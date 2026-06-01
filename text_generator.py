@@ -1,4 +1,6 @@
+import json
 import os
+import re
 
 import anthropic
 
@@ -66,6 +68,75 @@ Rules:
         )
 
         return message.content[0].text
+
+
+async def analyze_car_photos(image_b64_list: list[str]) -> dict:
+    """
+    Use Claude vision to extract car details from photos.
+    Returns a dict of detected fields (only fields with confident values included).
+    """
+    async with anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"]) as client:
+        content: list = []
+
+        for b64 in image_b64_list[:6]:
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": b64,
+                    },
+                }
+            )
+
+        content.append(
+            {
+                "type": "text",
+                "text": """Analyze these car photos and extract vehicle information.
+Return ONLY a valid JSON object — no explanation, no markdown fences.
+
+Use this exact schema (set a field to null if you cannot determine it with reasonable confidence):
+{
+  "year": "2020",
+  "make": "BMW",
+  "model": "3 Series",
+  "trim": "330i xDrive",
+  "exterior_color": "Alpine White",
+  "interior_color": "Black leather",
+  "condition": "Excellent",
+  "transmission": "Automatic",
+  "drivetrain": "AWD",
+  "engine": "2.0L Turbocharged 4-cylinder 255hp",
+  "features": "Panoramic sunroof, 19-inch alloy wheels, LED headlights, sport seats",
+  "notes": "Appears garage-kept, no visible scratches or wear"
+}
+
+Rules:
+- year: 4-digit string; if uncertain give your best single guess, not a range
+- condition: must be exactly one of: Excellent, Very Good, Good, Fair
+- transmission: Automatic, Manual, CVT, or DCT only
+- drivetrain: FWD, RWD, AWD, or 4WD / 4×4 only
+- features: only list features visibly present in the photos
+- Be specific on make/model (e.g. "F-150" not "pickup truck", "Camry" not "sedan")
+- Return ONLY the JSON object""",
+            }
+        )
+
+        message = await client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            messages=[{"role": "user", "content": content}],
+        )
+
+        raw = message.content[0].text.strip()
+        # Strip accidental markdown code fences
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+
+        data = json.loads(raw)
+        # Return only non-null, non-empty values
+        return {k: str(v).strip() for k, v in data.items() if v not in (None, "", "null")}
 
 
 def _format_details(car_info: dict) -> str:

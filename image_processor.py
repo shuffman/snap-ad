@@ -3,6 +3,7 @@ import io
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 MAX_DIMENSION = 2400
+ANALYSIS_DIMENSION = 1024  # smaller size for fast Claude vision calls
 
 
 def enhance_image(image_bytes: bytes) -> bytes:
@@ -47,4 +48,28 @@ def enhance_image(image_bytes: bytes) -> bytes:
 
     output = io.BytesIO()
     img.save(output, format="JPEG", quality=92, optimize=True)
+    return output.getvalue()
+
+
+def resize_for_analysis(image_bytes: bytes) -> bytes:
+    """Shrink and normalize an image for fast Claude vision analysis (no enhancement)."""
+    img = Image.open(io.BytesIO(image_bytes))
+    img = ImageOps.exif_transpose(img)
+
+    if img.mode == "RGBA":
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[3])
+        img = bg
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    if max(img.size) > ANALYSIS_DIMENSION:
+        ratio = ANALYSIS_DIMENSION / max(img.size)
+        img = img.resize(
+            (int(img.width * ratio), int(img.height * ratio)),
+            Image.LANCZOS,
+        )
+
+    output = io.BytesIO()
+    img.save(output, format="JPEG", quality=82)
     return output.getvalue()

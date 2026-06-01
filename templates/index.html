@@ -37,55 +37,52 @@
             <div class="row g-3">
 
               <div class="col-sm-4">
-                <label class="form-label fw-semibold">Year <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="year" placeholder="2022"
-                       required maxlength="4" pattern="\d{4}" inputmode="numeric">
-                <div class="invalid-feedback">Enter a 4-digit year.</div>
+                <label class="form-label fw-semibold">Year</label>
+                <input type="text" class="form-control" name="year" id="f_year" placeholder="2022"
+                       maxlength="4" inputmode="numeric">
               </div>
               <div class="col-sm-4">
-                <label class="form-label fw-semibold">Make <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="make" placeholder="Toyota" required>
-                <div class="invalid-feedback">Required.</div>
+                <label class="form-label fw-semibold">Make</label>
+                <input type="text" class="form-control" name="make" id="f_make" placeholder="Toyota">
               </div>
               <div class="col-sm-4">
-                <label class="form-label fw-semibold">Model <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="model" placeholder="Camry" required>
-                <div class="invalid-feedback">Required.</div>
+                <label class="form-label fw-semibold">Model</label>
+                <input type="text" class="form-control" name="model" id="f_model" placeholder="Camry">
               </div>
 
               <div class="col-sm-6">
                 <label class="form-label fw-semibold">Trim / Package</label>
-                <input type="text" class="form-control" name="trim" placeholder="XSE V6">
+                <input type="text" class="form-control" name="trim" id="f_trim" placeholder="XSE V6">
               </div>
               <div class="col-sm-6">
                 <label class="form-label fw-semibold">VIN</label>
-                <input type="text" class="form-control" name="vin" placeholder="1HGCM82633A123456" maxlength="17">
+                <input type="text" class="form-control" name="vin" id="f_vin" placeholder="1HGCM82633A123456" maxlength="17">
               </div>
 
               <div class="col-sm-6">
                 <label class="form-label fw-semibold">Mileage</label>
-                <input type="text" class="form-control" name="mileage" placeholder="32,000 miles">
+                <input type="text" class="form-control" name="mileage" id="f_mileage" placeholder="32,000 miles">
               </div>
               <div class="col-sm-6">
                 <label class="form-label fw-semibold">Asking Price</label>
                 <div class="input-group">
                   <span class="input-group-text">$</span>
-                  <input type="text" class="form-control" name="price" placeholder="28,500">
+                  <input type="text" class="form-control" name="price" id="f_price" placeholder="28,500">
                 </div>
               </div>
 
               <div class="col-sm-6">
                 <label class="form-label fw-semibold">Exterior Color</label>
-                <input type="text" class="form-control" name="exterior_color" placeholder="Midnight Black Metallic">
+                <input type="text" class="form-control" name="exterior_color" id="f_exterior_color" placeholder="Midnight Black Metallic">
               </div>
               <div class="col-sm-6">
                 <label class="form-label fw-semibold">Interior Color</label>
-                <input type="text" class="form-control" name="interior_color" placeholder="Black Leather">
+                <input type="text" class="form-control" name="interior_color" id="f_interior_color" placeholder="Black Leather">
               </div>
 
               <div class="col-sm-4">
                 <label class="form-label fw-semibold">Condition</label>
-                <select class="form-select" name="condition">
+                <select class="form-select" name="condition" id="f_condition">
                   <option value="">Select…</option>
                   <option>Excellent</option>
                   <option>Very Good</option>
@@ -95,7 +92,7 @@
               </div>
               <div class="col-sm-4">
                 <label class="form-label fw-semibold">Transmission</label>
-                <select class="form-select" name="transmission">
+                <select class="form-select" name="transmission" id="f_transmission">
                   <option value="">Select…</option>
                   <option>Automatic</option>
                   <option>Manual</option>
@@ -106,7 +103,7 @@
               </div>
               <div class="col-sm-4">
                 <label class="form-label fw-semibold">Drivetrain</label>
-                <select class="form-select" name="drivetrain">
+                <select class="form-select" name="drivetrain" id="f_drivetrain">
                   <option value="">Select…</option>
                   <option>FWD</option>
                   <option>RWD</option>
@@ -117,19 +114,19 @@
 
               <div class="col-12">
                 <label class="form-label fw-semibold">Engine</label>
-                <input type="text" class="form-control" name="engine" placeholder="3.5L V6 301hp">
+                <input type="text" class="form-control" name="engine" id="f_engine" placeholder="3.5L V6 301hp">
               </div>
 
               <div class="col-12">
                 <label class="form-label fw-semibold">Features &amp; Options</label>
-                <textarea class="form-control" name="features" rows="3"
+                <textarea class="form-control" name="features" id="f_features" rows="3"
                   placeholder="Sunroof, heated seats, Apple CarPlay, lane departure warning, backup camera, premium audio…"></textarea>
                 <div class="form-text">List anything that makes this car stand out to a buyer.</div>
               </div>
 
               <div class="col-12">
                 <label class="form-label fw-semibold">Additional Notes</label>
-                <textarea class="form-control" name="notes" rows="2"
+                <textarea class="form-control" name="notes" id="f_notes" rows="2"
                   placeholder="One owner, clean title, recent service, new tires…"></textarea>
               </div>
 
@@ -181,6 +178,13 @@
               <input type="url" class="form-control form-control-sm" name="gdrive_url" id="gdriveUrl"
                      placeholder="https://drive.google.com/drive/folders/…">
               <div class="form-text">Folder must be shared as <em>Anyone with the link can view</em></div>
+            </div>
+
+            <div id="analyzeSection" class="d-none">
+              <button type="button" class="btn btn-outline-primary w-100" id="analyzeBtn">
+                <i class="bi bi-robot me-2"></i>Auto-detect car info from photos
+              </button>
+              <div id="analyzeStatus" class="form-text text-center mt-1"></div>
             </div>
 
             <div class="ai-badge p-3 rounded">
