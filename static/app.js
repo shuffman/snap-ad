@@ -227,10 +227,8 @@ if (typeof RAW_LISTING !== 'undefined') {
     currentIdx = idx;
     if (hero) {
       hero.style.opacity = '0';
-      setTimeout(() => {
-        hero.src = `/image/${RESULT_ID}/${idx}?v=${Date.now()}`;
-        hero.style.opacity = '1';
-      }, 120);
+      hero.onload = () => { hero.style.opacity = '1'; hero.onload = null; };
+      hero.src = `/image/${RESULT_ID}/${idx}`;
     }
     document.querySelectorAll('.thumb-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
