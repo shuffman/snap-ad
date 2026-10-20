@@ -19,7 +19,7 @@ if (document.getElementById('uploadForm')) {
   const PROCESSING_STEPS = [
     'Downloading files…',
     'Enhancing photos…',
-    'Analyzing vehicle…',
+    'Analyzing item…',
     'Writing your listing…',
   ];
 

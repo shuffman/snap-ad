@@ -1,5 +1,5 @@
 """
-Push a car listing to the shuffman/forsale GitHub Pages repo via the Contents API.
+Push a for-sale listing to the shuffman/forsale GitHub Pages repo via the Contents API.
 """
 
 import base64
@@ -66,7 +66,7 @@ async def _put_file(
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 async def deploy_listing(
-    car_info: dict,
+    item_info: dict,
     enhanced_images: list[bytes],
     listing_text: str,
     listing_html: str | None = None,
@@ -76,7 +76,7 @@ async def deploy_listing(
     Returns the public GitHub Pages URL for the new listing.
     """
     headers = _gh_headers()
-    slug = _make_slug(car_info, listing_text)
+    slug = make_slug(item_info, listing_text)
 
     async with httpx.AsyncClient(headers=headers, timeout=120) as client:
         # 1. Upload images
@@ -86,20 +86,20 @@ async def deploy_listing(
                 client,
                 f"items/{slug}/images/{fname}",
                 img_bytes,
-                f"carad: add {slug} image {i + 1}",
+                f"snapad: add {slug} image {i + 1}",
             )
 
         # 2. Create/update listing page
-        page_html = _render_listing_page(slug, car_info, listing_text, len(enhanced_images), listing_html)
+        page_html = _render_listing_page(slug, item_info, listing_text, len(enhanced_images), listing_html)
         await _put_file(
             client,
             f"items/{slug}/index.html",
             page_html.encode(),
-            f"carad: add {slug} listing",
+            f"snapad: add {slug} listing",
         )
 
         # 3. Add card to root index.html
-        await _update_root_index(client, slug, car_info, listing_text)
+        await _update_root_index(client, slug, item_info, listing_text)
 
     return f"{PAGES_BASE}/items/{slug}/"
 
@@ -109,7 +109,7 @@ async def deploy_listing(
 async def _update_root_index(
     client: httpx.AsyncClient,
     slug: str,
-    car_info: dict,
+    item_info: dict,
     listing_text: str,
 ) -> None:
     current, sha = await _get_file(client, "index.html")
@@ -120,7 +120,7 @@ async def _update_root_index(
     if f'href="items/{slug}/"' in current:
         return
 
-    card = _render_index_card(slug, car_info, listing_text)
+    card = _render_index_card(slug, item_info, listing_text)
     marker = "<!-- Copy the block above to add more listings -->"
     if marker in current:
         updated = current.replace(marker, f"{card}\n\n      {marker}")
@@ -130,19 +130,15 @@ async def _update_root_index(
             f"      {card}\n\n    </div>\n  </main>",
         )
 
-    await _put_file(client, "index.html", updated.encode(), f"carad: add {slug} to index")
+    await _put_file(client, "index.html", updated.encode(), f"snapad: add {slug} to index")
 
 
-def _render_index_card(slug: str, car_info: dict, listing_text: str) -> str:
-    title = _title(car_info, listing_text)
-    price = f"${car_info['price']}" if car_info.get("price") else ""
+def _render_index_card(slug: str, item_info: dict, listing_text: str) -> str:
+    title = _title(item_info, listing_text)
+    price = f"${item_info['price']}" if item_info.get("price") else ""
     badge = f'<span class="card-badge">{price}</span>' if price else ""
 
-    sub_parts = [p for p in [
-        car_info.get("mileage"),
-        car_info.get("exterior_color"),
-        car_info.get("transmission"),
-    ] if p]
+    sub_parts = [_esc(s["value"]) for s in item_info.get("specs", [])[:3]]
     subtitle = " &middot; ".join(sub_parts)
     excerpt = _first_paragraph(listing_text)
 
@@ -165,13 +161,13 @@ def _render_index_card(slug: str, car_info: dict, listing_text: str) -> str:
 
 def _render_listing_page(
     slug: str,
-    car_info: dict,
+    item_info: dict,
     listing_text: str,
     n_images: int,
     listing_html: str | None = None,
 ) -> str:
-    title = _title(car_info, listing_text)
-    price_str = f"${car_info['price']}" if car_info.get("price") else "Contact for price"
+    title = _title(item_info, listing_text)
+    price_str = f"${item_info['price']}" if item_info.get("price") else "Contact for price"
     month_year = datetime.now().strftime("%B %Y")
 
     # Gallery
@@ -188,24 +184,18 @@ def _render_listing_page(
 
     # Specs
     spec_rows = [
-        ("Year",           car_info.get("year")),
-        ("Make &amp; Model", f"{car_info.get('make','')} {car_info.get('model','')}".strip() or None),
-        ("Trim",           car_info.get("trim")),
-        ("VIN",            car_info.get("vin")),
-        ("Mileage",        car_info.get("mileage")),
-        ("Exterior Color", car_info.get("exterior_color")),
-        ("Interior",       car_info.get("interior_color")),
-        ("Transmission",   car_info.get("transmission")),
-        ("Drivetrain",     car_info.get("drivetrain")),
-        ("Engine",         car_info.get("engine")),
-        ("Condition",      car_info.get("condition")),
+        ("Brand",     item_info.get("brand")),
+        ("Model",     item_info.get("model")),
+        ("Year",      item_info.get("year")),
+        *((s["label"], s["value"]) for s in item_info.get("specs", [])),
+        ("Condition", item_info.get("condition")),
     ]
     specs_html = ""
     for label, val in spec_rows:
         if val:
             specs_html += (
                 f'            <div class="spec-item">\n'
-                f'              <dt>{label}</dt>\n'
+                f'              <dt>{_esc(label)}</dt>\n'
                 f'              <dd>{_esc(str(val))}</dd>\n'
                 f'            </div>\n'
             )
@@ -214,15 +204,15 @@ def _render_listing_page(
     subject = quote(f"Inquiry: {title}")
 
     inquiry_details = ""
-    if car_info.get("condition"):
+    if item_info.get("condition"):
         inquiry_details += (
             f'            <div class="inquiry-detail">'
-            f'<span>Condition</span><span>{_esc(car_info["condition"])}</span></div>\n'
+            f'<span>Condition</span><span>{_esc(item_info["condition"])}</span></div>\n'
         )
-    if car_info.get("mileage"):
+    if item_info.get("category"):
         inquiry_details += (
             f'            <div class="inquiry-detail">'
-            f'<span>Mileage</span><span>{_esc(car_info["mileage"])}</span></div>\n'
+            f'<span>Category</span><span>{_esc(item_info["category"])}</span></div>\n'
         )
     inquiry_details += (
         f'            <div class="inquiry-detail">'
@@ -354,23 +344,17 @@ def _headline_from_listing(listing_text: str) -> str:
     return ""
 
 
-def _title(car_info: dict, listing_text: str = "") -> str:
+def _title(item_info: dict, listing_text: str = "") -> str:
     # Prefer the listing headline — it reflects any corrections the user applied.
     if listing_text:
         headline = _headline_from_listing(listing_text)
         if headline:
             return headline
-    parts = [
-        car_info.get("year", ""),
-        car_info.get("make", ""),
-        car_info.get("model", ""),
-        car_info.get("trim", ""),
-    ]
-    return " ".join(p for p in parts if p).strip() or "Vehicle For Sale"
+    return item_info.get("item", "").strip() or "For Sale"
 
 
-def _make_slug(car_info: dict, listing_text: str = "") -> str:
-    # Derive from listing headline so corrections to year/make/model are reflected.
+def make_slug(item_info: dict, listing_text: str = "") -> str:
+    # Derive from listing headline so corrections to the item name are reflected.
     if listing_text:
         headline = _headline_from_listing(listing_text)
         if headline:
@@ -379,8 +363,7 @@ def _make_slug(car_info: dict, listing_text: str = "") -> str:
             slug = re.sub(r"-+", "-", slug).strip("-")
             if len(slug) > 3:
                 return slug
-    parts = [car_info.get("year", ""), car_info.get("make", ""), car_info.get("model", "")]
-    raw = "-".join(p.lower() for p in parts if p)
+    raw = item_info.get("item", "").lower()
     slug = re.sub(r"[^a-z0-9]+", "-", raw).strip("-")
     return slug or "listing"
 

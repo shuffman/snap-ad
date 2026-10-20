@@ -6,7 +6,7 @@ import anthropic
 
 
 async def generate_listing(
-    car_info: dict,
+    item_info: dict,
     image_b64_list: list[str],
     pdf_b64_list: list[str] | None = None,
     extra_info: str | None = None,
@@ -46,31 +46,31 @@ async def generate_listing(
         content.append(
             {
                 "type": "text",
-                "text": f"""You are a professional automotive copywriter who specializes in online car listings that generate real inquiries.
+                "text": f"""You are a professional copywriter who specializes in online classified listings that generate real inquiries — for anything people sell: vehicles, furniture, electronics, tools, instruments, collectibles, clothing, real estate, and more.
 
-Based on the vehicle details and photos provided, write a compelling listing that stops a buyer mid-scroll and makes them pick up the phone.
+Based on the item details and photos provided, write a compelling listing that stops a buyer mid-scroll and makes them reach out. Write like an expert in this item's category would, using the terms its buyers care about.
 
-Car Details:
-{_format_details(car_info)}{extra_block}
+Item Details:
+{_format_details(item_info)}{extra_block}
 
 Write the listing using this exact structure:
 
 # [Headline]
-One punchy, specific headline. Lead with the year/make/model and a key emotional hook — not generic hype.
+One punchy, specific headline. Lead with what the item is (brand/model/year where relevant) and a key hook — not generic hype.
 
 [Opening paragraph]
-2-3 sentences. Paint the picture. Who is this car for, and why will they love it?
+2-3 sentences. Paint the picture. Who is this for, and why will they love it?
 
 ## What Makes This One Stand Out
-3-4 sentences covering what's special: condition, history, trim level, rare options, or something that creates genuine trust (one owner, garage kept, recent work, etc.).
+3-4 sentences covering what's special: condition, history, provenance, rare options, or something that creates genuine trust (one owner, barely used, recently serviced, original packaging, etc.).
 
 ## Key Highlights
 - Bullet 1
 - Bullet 2
-- (5–8 bullets covering drivetrain, mileage, features, condition notes, and any extras worth calling out)
+- (5–8 bullets covering the specs, features, condition notes, and extras that matter most for this kind of item)
 
 ## The Bottom Line
-2-3 sentences on value. Be specific about why the price is right — don't just say "priced to sell." Reference market comps, remaining warranty, or cost to replicate.
+2-3 sentences on value. Be specific about why the price is right — don't just say "priced to sell." Reference what it costs new, comparable listings, remaining warranty, or included extras.
 
 **[Call to action — one sentence urging immediate contact]**
 
@@ -78,7 +78,7 @@ Rules:
 - Use the real data from the details; don't invent specs
 - Be enthusiastic but credible — skip empty superlatives
 - No clichés: "won't last", "rare find", "priced to move", "don't miss out"
-- Target length: 350–450 words
+- Target length: 250–450 words; shorter for simple, inexpensive items
 - Output clean markdown only""",
             }
         )
@@ -92,18 +92,19 @@ Rules:
         return message.content[0].text
 
 
-async def analyze_car_photos(
+async def analyze_item(
     image_b64_list: list[str],
     pdf_b64_list: list[str] | None = None,
 ) -> dict:
     """
-    Use Claude vision + document understanding to extract car details from photos and PDFs.
-    Returns a dict of detected fields (only fields with confident values included).
+    Use Claude vision + document understanding to identify the item and extract its details.
+    Returns a dict of detected fields (only fields with confident values included);
+    "specs" is a list of {"label", "value"} pairs chosen to suit the item's category.
     """
     async with anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"]) as client:
         content: list = []
 
-        # PDFs first so Claude reads structured data (VIN, mileage, options) before the photos
+        # PDFs first so Claude reads structured data (serials, specs, history) before the photos
         for b64 in (pdf_b64_list or [])[:5]:
             content.append(
                 {
@@ -130,7 +131,7 @@ async def analyze_car_photos(
 
         sources = []
         if pdf_b64_list:
-            sources.append("PDF documents (build sheets, Carfax reports, window stickers, etc.)")
+            sources.append("PDF documents (receipts, manuals, spec sheets, appraisals, history reports, etc.)")
         if image_b64_list:
             sources.append("photos")
         source_desc = " and ".join(sources) if sources else "the provided files"
@@ -138,44 +139,49 @@ async def analyze_car_photos(
         content.append(
             {
                 "type": "text",
-                "text": f"""Analyze all provided {source_desc} to extract vehicle information.
-PDFs may include Carfax reports (read mileage, accident history, owners), build sheets (read factory options, trim, VIN), or window stickers.
+                "text": f"""Analyze all provided {source_desc} to identify the item being sold and extract its details.
+The item could be anything: a vehicle, furniture, electronics, a tool, an instrument, a collectible, clothing, property, etc.
+Read labels, model plates, serial stickers, receipts and documents where visible.
 Return ONLY a valid JSON object — no explanation, no markdown fences.
 
 Use this exact schema (set a field to null if you cannot determine it with reasonable confidence):
 {{
-  "year": "2020",
-  "make": "BMW",
-  "model": "3 Series",
-  "trim": "330i xDrive",
-  "vin": "WBA5R1C5XKA123456",
-  "mileage": "34,217",
-  "exterior_color": "Alpine White",
-  "interior_color": "Black leather",
-  "condition": "Excellent",
-  "transmission": "Automatic",
-  "drivetrain": "AWD",
-  "engine": "2.0L Turbocharged 4-cylinder 255hp",
-  "features": "Panoramic sunroof, 19-inch alloy wheels, LED headlights, sport seats",
-  "notes": "1 owner, no accidents reported, garage-kept"
+  "item": "Herman Miller Aeron Chair",
+  "category": "Furniture",
+  "brand": "Herman Miller",
+  "model": "Aeron Size B",
+  "year": "2019",
+  "condition": "Very Good",
+  "price": null,
+  "specs": [
+    {{"label": "Size", "value": "B (medium)"}},
+    {{"label": "Color", "value": "Graphite"}},
+    {{"label": "Adjustments", "value": "Fully adjustable arms, PostureFit SL"}}
+  ],
+  "features": "Tilt limiter, forward tilt, adjustable lumbar",
+  "notes": "Purchased new in 2019, smoke-free home, original receipt"
 }}
 
 Rules:
-- vin: copy exactly as printed — 17 characters, no spaces
-- mileage: copy the exact odometer reading from Carfax or build sheet if present
-- year: 4-digit string
-- condition: must be exactly one of: Excellent, Very Good, Good, Fair
-- transmission: Automatic, Manual, CVT, or DCT only
-- drivetrain: FWD, RWD, AWD, or 4WD / 4×4 only
+- item: short, specific name of what is being sold, as a buyer would search for it
+- category: one or two words, e.g. Vehicle, Furniture, Electronics, Tools, Musical Instrument, Collectible, Clothing, Sporting Goods, Home & Garden, Real Estate
+- year: 4-digit string (model year, manufacture year, or purchase year) — null if not relevant
+- condition: must be exactly one of: New, Excellent, Very Good, Good, Fair
+- price: only if visible in the files (a price tag or listing), digits and commas only
+- specs: 3–10 of the facts buyers of this category care most about, with labels suited to it
+  (vehicle: Mileage, VIN, Transmission, Drivetrain, Engine, Exterior Color;
+   electronics: Storage, Screen Size, Battery Health, Serial Number;
+   furniture: Dimensions, Material, Color; clothing: Size, Material; etc.)
+  Copy serial numbers, VINs and odometer readings exactly as printed.
 - features: list features from documents or visibly in photos
-- notes: include owner count, accident history, service records if found in documents
+- notes: ownership history, accessories included, service or repair records, flaws
 - Return ONLY the JSON object""",
             }
         )
 
         message = await client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=600,
+            max_tokens=800,
             messages=[{"role": "user", "content": content}],
         )
 
@@ -185,8 +191,16 @@ Rules:
         raw = re.sub(r"\s*```$", "", raw)
 
         data = json.loads(raw)
+        specs = [
+            {"label": str(s["label"]).strip(), "value": str(s["value"]).strip()}
+            for s in (data.pop("specs", None) or [])
+            if isinstance(s, dict) and s.get("label") and s.get("value") not in (None, "", "null")
+        ]
         # Return only non-null, non-empty values
-        return {k: str(v).strip() for k, v in data.items() if v not in (None, "", "null")}
+        info = {k: str(v).strip() for k, v in data.items() if v not in (None, "", "null")}
+        if specs:
+            info["specs"] = specs
+        return info
 
 
 async def refine_listing(current_text: str, correction: str) -> str:
@@ -197,7 +211,7 @@ async def refine_listing(current_text: str, correction: str) -> str:
             max_tokens=1400,
             messages=[{
                 "role": "user",
-                "content": f"""You are revising a car listing based on feedback from the seller.
+                "content": f"""You are revising a for-sale listing based on feedback from the seller.
 
 Current listing:
 ---
@@ -209,7 +223,7 @@ Seller's correction or addition:
 
 Instructions:
 - Keep the same markdown structure and overall format
-- Correct any facts mentioned (mileage, price, color, features, etc.) throughout the listing
+- Correct any facts mentioned (price, condition, specs, features, etc.) throughout the listing
 - Naturally incorporate any new information provided
 - Keep the same persuasive tone — don't water it down
 - Return only the revised listing, no preamble or explanation""",
@@ -218,27 +232,25 @@ Instructions:
         return message.content[0].text
 
 
-def _format_details(car_info: dict) -> str:
+def _format_details(item_info: dict) -> str:
     label_map = {
-        "year": "Year",
-        "make": "Make",
+        "item": "Item",
+        "category": "Category",
+        "brand": "Brand",
         "model": "Model",
-        "trim": "Trim / Package",
-        "vin": "VIN",
-        "mileage": "Mileage",
-        "price": "Asking Price",
-        "exterior_color": "Exterior Color",
-        "interior_color": "Interior Color",
+        "year": "Year",
         "condition": "Condition",
-        "transmission": "Transmission",
-        "drivetrain": "Drivetrain",
-        "engine": "Engine",
-        "features": "Features & Options",
-        "notes": "Additional Notes",
+        "price": "Asking Price",
     }
     lines = []
     for key, label in label_map.items():
-        val = car_info.get(key, "").strip()
+        val = item_info.get(key, "").strip()
+        if val:
+            lines.append(f"- {label}: {val}")
+    for spec in item_info.get("specs", []):
+        lines.append(f"- {spec['label']}: {spec['value']}")
+    for key, label in (("features", "Features"), ("notes", "Additional Notes")):
+        val = item_info.get(key, "").strip()
         if val:
             lines.append(f"- {label}: {val}")
     return "\n".join(lines) if lines else "(No details provided)"

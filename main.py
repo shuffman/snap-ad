@@ -19,8 +19,8 @@ load_dotenv()
 
 from gdrive import fetch_files_from_drive
 from image_processor import PRESETS, enhance_image, resize_for_analysis
-from publisher import deploy_listing
-from text_generator import analyze_car_photos, generate_listing, refine_listing
+from publisher import make_slug, deploy_listing
+from text_generator import analyze_item, generate_listing, refine_listing
 
 _executor = ThreadPoolExecutor(max_workers=4)
 _results: dict = {}
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     _executor.shutdown(wait=False)
 
 
-app = FastAPI(title="CarAd Pro", lifespan=lifespan)
+app = FastAPI(title="SnapAd", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -171,15 +171,15 @@ async def _run_job(
         resized_images = [r for r in resized_results if isinstance(r, bytes)]
 
         # ── 3. Analyze ──────────────────────────────────────────────────────
-        status("analyzing", "Analyzing vehicle…", 62)
+        status("analyzing", "Analyzing item…", 62)
 
         img_b64_small = [base64.b64encode(r).decode() for r in resized_images]
         pdf_b64 = [base64.b64encode(r).decode() for r in raw_pdfs[:5]]
 
         try:
-            car_info = await analyze_car_photos(img_b64_small, pdf_b64 or None)
+            item_info = await analyze_item(img_b64_small, pdf_b64 or None)
         except Exception:
-            car_info = {}
+            item_info = {}
 
         # ── 4. Generate listing ─────────────────────────────────────────────
         status("generating", "Writing your listing…", 78)
@@ -187,7 +187,7 @@ async def _run_job(
         img_b64_full = [base64.b64encode(r).decode() for r in enhanced_images[:4]]
         try:
             listing_text = await generate_listing(
-                car_info, img_b64_full, pdf_b64 or None, extra_info or None
+                item_info, img_b64_full, pdf_b64 or None, extra_info or None
             )
         except Exception as e:
             listing_text = f"*(Could not generate listing: {e})*"
@@ -195,7 +195,7 @@ async def _run_job(
         # ── 5. Store & finish ───────────────────────────────────────────────
         result_id = str(uuid.uuid4())
         _results[result_id] = {
-            "car_info": car_info,
+            "item_info": item_info,
             "extra_info": extra_info,
             "raw_images": raw_images,
             "images": enhanced_images,
@@ -260,7 +260,7 @@ async def regenerate(result_id: str, request: Request):
 
     try:
         listing_text = await generate_listing(
-            data["car_info"], img_b64, pdf_b64 or None, extra_info,
+            data["item_info"], img_b64, pdf_b64 or None, extra_info,
         )
         data["listing_text"] = listing_text
         return JSONResponse({"listing_text": listing_text})
@@ -369,9 +369,7 @@ async def download_zip(result_id: str, request: Request):
         zf.writestr("listing.txt", listing_text)
     buf.seek(0)
 
-    car = data.get("car_info", {})
-    name = " ".join(p for p in [car.get("year"), car.get("make"), car.get("model")] if p)
-    filename = (name.lower().replace(" ", "-") or "listing") + ".zip"
+    filename = make_slug(data.get("item_info", {}), listing_text) + ".zip"
 
     return StreamingResponse(
         buf,
@@ -399,7 +397,7 @@ async def deploy(result_id: str, request: Request):
 
     try:
         url = await deploy_listing(
-            car_info=data["car_info"],
+            item_info=data["item_info"],
             enhanced_images=data["images"],
             listing_text=listing_text,
             listing_html=listing_html,
