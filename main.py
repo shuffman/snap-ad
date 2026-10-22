@@ -11,12 +11,13 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 load_dotenv()
 
+import access
 from gdrive import fetch_files_from_drive
 from image_processor import PRESETS, enhance_image, resize_for_analysis
 from publisher import make_slug, deploy_listing
@@ -38,12 +39,38 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
+# ── Auth: every route except /healthz needs a valid Cloudflare Access token ────
+
+@app.middleware("http")
+async def require_access(request: Request, call_next):
+    if request.url.path == "/healthz":
+        return await call_next(request)
+    try:
+        request.state.email = access.identify(request.headers.get("Cf-Access-Jwt-Assertion"))
+    except access.AccessDenied as e:
+        return PlainTextResponse(f"Forbidden: {e}", status_code=403)
+    return await call_next(request)
+
+
+@app.get("/healthz")
+async def healthz():
+    return {"ok": True}
+
+
 # ── Pages ──────────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     error = request.query_params.get("error", "")
-    return templates.TemplateResponse("index.html", {"request": request, "error": error})
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "error": error,
+            "remaining": access.remaining(request.state.email),
+            "daily_limit": access.FRIEND_DAILY_LIMIT,
+        },
+    )
 
 
 @app.get("/result/{result_id}", response_class=HTMLResponse)
@@ -68,6 +95,7 @@ async def result_page(request: Request, result_id: str):
 
 @app.post("/process")
 async def process(
+    request: Request,
     images: List[UploadFile] = File(default=[]),
     gdrive_url: str = Form(""),
     extra_info: str = Form(""),
@@ -90,6 +118,10 @@ async def process(
     if not raw_images and not raw_pdfs and not gdrive_url.strip():
         return JSONResponse({"error": "no_files"}, status_code=400)
 
+    email = request.state.email
+    if not access.try_consume(email):
+        return JSONResponse({"error": "limit"}, status_code=429)
+
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {
         "step": "queued",
@@ -101,7 +133,7 @@ async def process(
     }
 
     asyncio.create_task(
-        _run_job(job_id, raw_images, raw_pdfs, gdrive_url.strip(), extra_info.strip())
+        _run_job(job_id, email, raw_images, raw_pdfs, gdrive_url.strip(), extra_info.strip())
     )
 
     return JSONResponse({"job_id": job_id})
@@ -111,6 +143,7 @@ async def process(
 
 async def _run_job(
     job_id: str,
+    email: str,
     raw_images: list[bytes],
     raw_pdfs: list[bytes],
     gdrive_url: str,
@@ -208,6 +241,7 @@ async def _run_job(
         job.update({"step": "done", "detail": "Done!", "progress": 100, "result_id": result_id})
 
     except Exception as e:
+        access.refund(email)
         job.update({"step": "error", "error": str(e), "progress": 0})
 
 

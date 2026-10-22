@@ -15,6 +15,14 @@
     <h1 class="upload-headline">What are you selling?</h1>
     <p class="upload-sub">Drop photos or documents — we'll write the listing.</p>
 
+    {% if remaining is not none %}
+    <p class="quota-note">{{ remaining }} of {{ daily_limit }} ads left today</p>
+    {% endif %}
+
+    {% if error == 'limit' %}
+    <div class="upload-error">You've used all {{ daily_limit }} of today's ads. Your quota resets at midnight Pacific time.</div>
+    {% endif %}
+
     {% if error == 'no_files' %}
     <div class="upload-error">Please add at least one photo or document before continuing.</div>
     {% endif %}

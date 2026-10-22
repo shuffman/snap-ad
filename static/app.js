@@ -165,6 +165,10 @@ if (document.getElementById('uploadForm')) {
         window.location.href = '/?error=no_files';
         return;
       }
+      if (body.error === 'limit') {
+        window.location.href = '/?error=limit';
+        return;
+      }
       if (body.error) throw new Error(body.error);
 
       const { job_id } = body;
