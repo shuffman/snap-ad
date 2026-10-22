@@ -40,13 +40,15 @@ body.upload-page {
 }
 
 .upload-logo {
-  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.1rem;
   font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
+  color: #fff;
   margin-bottom: 2.5rem;
 }
+
+.upload-logo span,
+.workspace-logo span { color: var(--accent); }
 
 .upload-headline {
   font-size: clamp(1.9rem, 5vw, 2.8rem);
@@ -337,11 +339,10 @@ body.workspace-page {
   border-bottom: 1px solid var(--border);
 }
 .workspace-logo {
-  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent);
+  color: #fff;
   text-decoration: none;
 }
 .workspace-header-actions { display: flex; gap: 0.5rem; }

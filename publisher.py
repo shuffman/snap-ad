@@ -86,7 +86,7 @@ async def deploy_listing(
                 client,
                 f"items/{slug}/images/{fname}",
                 img_bytes,
-                f"snapad: add {slug} image {i + 1}",
+                f"ad-buddy: add {slug} image {i + 1}",
             )
 
         # 2. Create/update listing page
@@ -95,7 +95,7 @@ async def deploy_listing(
             client,
             f"items/{slug}/index.html",
             page_html.encode(),
-            f"snapad: add {slug} listing",
+            f"ad-buddy: add {slug} listing",
         )
 
         # 3. Add card to root index.html
@@ -130,7 +130,7 @@ async def _update_root_index(
             f"      {card}\n\n    </div>\n  </main>",
         )
 
-    await _put_file(client, "index.html", updated.encode(), f"snapad: add {slug} to index")
+    await _put_file(client, "index.html", updated.encode(), f"ad-buddy: add {slug} to index")
 
 
 def _render_index_card(slug: str, item_info: dict, listing_text: str) -> str:

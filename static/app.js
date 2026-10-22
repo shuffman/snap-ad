@@ -311,7 +311,7 @@ if (typeof RAW_LISTING !== 'undefined') {
   // ── Refine with corrections ──
   const refineInput = document.getElementById('refineInput');
   const refineBtn   = document.getElementById('refineBtn');
-  const REFINE_KEY  = 'carad_refine_notes';
+  const REFINE_KEY  = 'adbuddy_refine_notes';
 
   // Restore saved notes
   if (refineInput) {

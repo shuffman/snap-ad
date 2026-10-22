@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     _executor.shutdown(wait=False)
 
 
-app = FastAPI(title="SnapAd", lifespan=lifespan)
+app = FastAPI(title="adbuddy", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
