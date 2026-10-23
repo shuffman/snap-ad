@@ -1,26 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>adbuddy</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="/static/style.css" rel="stylesheet">
+{% include "_head.html" %}
 </head>
 <body class="workspace-page">
 
-  <header class="workspace-header">
-    <a href="/" class="workspace-logo">ad<span>buddy</span></a>
-    <div class="workspace-header-actions">
-      <a href="/" class="header-btn">
-        <i class="bi bi-plus-lg"></i> New Listing
-      </a>
-    </div>
-  </header>
+{% set show_new_listing = true %}
+{% include "_header.html" %}
 
   {% if drive_error %}
   <div class="drive-error-bar">
-    <i class="bi bi-exclamation-triangle-fill"></i> {{ drive_error }}
+    <i class="bi bi-exclamation-circle"></i><span>{{ drive_error }}</span>
   </div>
   {% endif %}
 
@@ -52,7 +42,7 @@
       {% endif %}
 
       <div class="photo-toolbar">
-        <span class="toolbar-label">Enhance</span>
+        <span class="label toolbar-label">Enhance</span>
         <div class="preset-group">
           <button class="preset-btn {% if enhance_preset == 'natural' %}active{% endif %}"
                   data-preset="natural">Natural</button>
@@ -100,7 +90,7 @@
       <div id="publishStatus" class="publish-status hidden"></div>
 
       <div class="refine-bar">
-        <label class="refine-label">Notes &amp; corrections</label>
+        <label class="label" for="refineInput">Notes &amp; corrections</label>
         <textarea id="refineInput" rows="3"
                   placeholder="Correct or add info — e.g. 'It has a small scratch on the left side, comes with the original box, asking $450'. Used when regenerating too."></textarea>
         <div class="refine-actions">

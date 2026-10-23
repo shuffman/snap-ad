@@ -1,34 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>adbuddy</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="/static/style.css" rel="stylesheet">
+{% include "_head.html" %}
 </head>
 <body class="upload-page">
 
-  <div class="upload-screen">
-    <div class="upload-logo">ad<span>buddy</span></div>
+{% include "_header.html" %}
+
+  <main class="upload-main">
 
     <h1 class="upload-headline">What are you selling?</h1>
-    <p class="upload-sub">Drop photos or documents — we'll write the listing.</p>
+    <p class="upload-sub">Drop photos or documents and adbuddy writes the listing.</p>
 
     {% if remaining is not none %}
-    <p class="quota-note">{{ remaining }} of {{ daily_limit }} ads left today</p>
+    <div class="quota">
+      <span class="label">Ads left today</span>
+      <span class="num">{{ remaining }}<small> / {{ daily_limit }}</small></span>
+    </div>
     {% endif %}
 
     {% if error == 'limit' %}
-    <div class="upload-error">You've used all {{ daily_limit }} of today's ads. Your quota resets at midnight Pacific time.</div>
+    <div class="upload-error"><i class="bi bi-exclamation-circle"></i><span>You've used all {{ daily_limit }} of today's ads. Your quota resets at midnight Pacific time.</span></div>
     {% endif %}
 
     {% if error == 'no_files' %}
-    <div class="upload-error">Please add at least one photo or document before continuing.</div>
+    <div class="upload-error"><i class="bi bi-exclamation-circle"></i><span>Add at least one photo or document before continuing.</span></div>
     {% endif %}
 
     <form id="uploadForm" action="/process" method="post" enctype="multipart/form-data">
 
+      <span class="label field-label">Photos &amp; documents</span>
       <div id="dropZone" class="drop-zone-lg">
         <input type="file" id="fileInput" name="images" multiple accept="image/*,.pdf" class="hidden">
 
@@ -52,16 +53,17 @@
                placeholder="Or paste a Google Drive folder link…">
       </div>
 
-      <textarea name="extra_info" class="extra-info-box"
+      <label class="label field-label" for="extraInfo">Notes</label>
+      <textarea name="extra_info" id="extraInfo" class="extra-info-box"
                 placeholder="Anything else to include — price, location, history, size, key features, flaws…"
                 rows="3"></textarea>
 
       <button type="submit" class="btn-create" id="submitBtn">
-        Create Listing <i class="bi bi-arrow-right"></i>
+        Create listing <i class="bi bi-arrow-right"></i>
       </button>
 
     </form>
-  </div>
+  </main>
 
   <!-- Processing overlay -->
   <div id="processingOverlay" class="processing-overlay hidden">
